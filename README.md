@@ -13,8 +13,9 @@
 
 ## Software function
 
-- [ ] Read sensor pH, Ec
+- [x] Read sensor pH, Ec
 - [ ] Nutri control (with threshold)
-- [ ] Read RTC
+- [x] Read RTC
 - [ ] Send/Recieve data with ESP 8266
+- [x] Store data in SD card
 - [ ] Menu control in LCD
