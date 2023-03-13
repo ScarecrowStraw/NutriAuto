@@ -61,7 +61,6 @@ float LightOn;                              // Time the plants have had light
 float proportion_to_light = LightTime / 24; // calculate desired hours of light total and supplemental daily based on above values
 float seconds_light = 0;
 float proportion_lit;
-float start_time;
 float seconds_elapsed;
 float seconds_elapsed_total;
 float seconds_for_this_cycle;
@@ -75,34 +74,16 @@ void setup()
     logicSetup();       // Replaces the void Setup
     timeSetup();        // Initialises the RTC module
     SDSetup();          // Initialises the SD module
-    start_time = now.get();
     seconds_elapsed_total = 0;
 }
 
 void loop()
 {
     logicLoop(); // pH algorithm loops through this one, also the smooting of the signal
-    fotoLoop();  // Light measurements loop through this one
 
     TankProgControl(); // Conrolling loop for refilling the tank
 
-    // TODO: Light?
-    LightControl();    // Controls when the grow lights are turned on
-
     SDLoop();          // Writing all sensor data to SD
-}
-
-// reads eepromvalue for following variables
-void EepromRead() 
-{
-    Setpoint = EEPROM.readFloat(EepromSetpoint);
-    SetHysteris = EEPROM.readFloat(EepromSetHysteris);
-    FanTemp = EEPROM.read(EepromFanTemp);
-    FanHumid = EEPROM.read(EepromFanHumid);
-    pinHighTime = EEPROM.readLong(EepromPinHighTime);
-    pinLowTime = EEPROM.readLong(EepromPinLowTime);
-    smoothPh = EEPROM.readInt(EepromSmoothPh);
-    LightTime = EEPROM.readFloat(EepromLightTime);
 }
 
 // LCD setup
@@ -129,7 +110,6 @@ void logicSetup()
 
     pmem == 0;
 
-    InitDHT();
     delay(300);
 }
 
@@ -448,19 +428,6 @@ void logicLoop()
     delay(250);
 }
 
-
-void fotoLoop()
-{
-    lightADCReading = analogRead(lightSensor);
-    // Calculating the voltage of the ADC for light
-    lightInputVoltage = 5.0 * ((double)lightADCReading / 1024.0);
-    // Calculating the resistance of the photoresistor in the voltage divider
-    lightResistance = (10.0 * 5.0) / lightInputVoltage - 10.0;
-    // Calculating the intensity of light in lux
-    currentLightInLux = 255.84 * pow(lightResistance, -10 / 9);
-}
-
-
 void phIncreaseSetpoint()
 {
     Setpoint = Setpoint + 0.01;
@@ -468,12 +435,6 @@ void phIncreaseSetpoint()
     {
         Setpoint = 9.00;
     }
-    // if (page == 2)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumF(Setpoint, 2, 76, 79);
-    // }
 }
 
 
@@ -484,12 +445,6 @@ void phDecreaseSetpoint()
     {
         Setpoint = 3.00;
     }
-    // if (page == 2)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumF(Setpoint, 2, 76, 79);
-    // }
 }
 
 void phIncreaseHysteris()
@@ -499,12 +454,6 @@ void phIncreaseHysteris()
     {
         SetHysteris = 9.00;
     }
-    // if (page == 2)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumF(SetHysteris, 2, 76, 162);
-    // }
 }
 
 
@@ -515,12 +464,6 @@ void phDecreaseHysteris()
     {
         SetHysteris = 0.01;
     }
-    // if (page == 2)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumF(SetHysteris, 2, 76, 162);
-    // }
 }
 
 
@@ -531,12 +474,6 @@ void DecreasePumpHighTime()
     {
         pinHighTime = 0;
     }
-    // if (page == 4)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(pinHighTime, 76, 79);
-    // }
 }
 
 
@@ -547,12 +484,6 @@ void IncreasePumpHighTime()
     {
         pinHighTime = 2000;
     }
-    // if (page == 4)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(pinHighTime, 76, 79);
-    // }
 }
 
 void DecreasePumpLowTime()
@@ -562,12 +493,6 @@ void DecreasePumpLowTime()
     {
         pinLowTime = 0;
     }
-    // if (page == 4)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(pinLowTime, 76, 162);
-    // }
 }
 
 
@@ -578,108 +503,6 @@ void IncreasePumpLowTime()
     {
         pinLowTime = 20000;
     }
-    // if (page == 4)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(pinLowTime, 76, 162);
-    // }
-}
-
-
-void FanDecreaseTemp()
-{
-    FanTemp = FanTemp - 1;
-    if (FanTemp <= 0)
-    {
-        FanTemp = 0;
-    }
-    // if (page == 1)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(FanTemp, 76, 79);
-    // }
-}
-
-
-void FanIncreaseTemp()
-{
-    FanTemp = FanTemp + 1;
-    if (FanTemp >= 50)
-    {
-        FanTemp = 50;
-    }
-    // if (page == 1)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(FanTemp, 76, 79);
-    // }
-}
-
-
-void FanIncreaseHumid()
-{
-    FanHumid = FanHumid + 1;
-    if (FanHumid >= 100)
-    {
-        FanHumid = 100;
-    }
-    // if (page == 1)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(FanHumid, 76, 162);
-    // }
-}
-
-
-void FanDecreaseHumid()
-{
-    FanHumid = FanHumid - 1;
-    if (FanHumid <= 0)
-    {
-        FanHumid = 0;
-    }
-    // if (page == 1)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(FanHumid, 76, 162);
-    // }
-}
-
-
-void LightIncreaseTime()
-{
-    LightTime = LightTime + 1;
-    if (LightTime >= 24)
-    {
-        LightTime = 24;
-    }
-    // if (page == 5)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(LightTime, 76, 79);
-    // }
-}
-
-
-void LightDecreaseTime()
-{
-    LightTime = LightTime - 1;
-    if (LightTime <= 0)
-    {
-        LightTime = 0;
-    }
-    // if (page == 5)
-    // {
-    //     myGLCD.setColor(0, 0, 255);
-    //     myGLCD.setBackColor(255, 255, 255);
-    //     myGLCD.printNumI(LightTime, 76, 79);
-    // }
 }
 
 
@@ -698,76 +521,24 @@ void TankProgControl()
 
         if (levelHigh == LOW)
         {
-            if (page == 0)
-            {
-                myGLCD.setColor(0, 0, 255);
-                myGLCD.print("HalfFull", 91, 207);
-            }
             if (levelLow == LOW)
             {
-                if (page == 0)
-                {
-                    myGLCD.setColor(0, 0, 255);
-                    myGLCD.print("Filling ", 91, 207);
-                }
                 digitalWrite(solenoidPin, HIGH); // solenoid valve open.
             }
         }
         else
         {
-            if (page == 0)
-            {
-                myGLCD.setColor(0, 0, 255);
-                myGLCD.print("Full    ", 91, 207);
-            }
             if (levelLow == HIGH)
             {
                 digitalWrite(solenoidPin, LOW); // solenoid valve closed.
-                if (page == 3)
-                {
-                    myGLCD.setColor(0, 0, 255);
-                    myGLCD.print("OFF", 260, 171);
-                }
             }
         }
     }
 }
 
-
-void LightControl()
-{
-    seconds_for_this_cycle = now.get() - seconds_elapsed_total;
-    seconds_elapsed_total = now.get() - start_time;
-    if (currentLightInLux > 3000)
-    {
-        seconds_light = seconds_light + seconds_for_this_cycle;
-    }
-    if (currentLightInLux > 3000)
-    {
-        digitalWrite(growLights, LOW);
-    }
-    if (proportion_lit > proportion_to_light)
-    {
-        digitalWrite(growLights, LOW);
-        delay(300000);
-    }
-    proportion_lit = seconds_light / seconds_elapsed_total;
-    if (currentLightInLux < 3000 and proportion_lit < proportion_to_light)
-    {
-        digitalWrite(growLights, HIGH);
-        delay(10000);
-    }
-}
-
-
 void ManualRefilProg()
 {
     digitalWrite(solenoidPin, HIGH);
-    // if (page == 3)
-    // {
-    //     myGLCD.setColor(255, 255, 0);
-    //     myGLCD.print("ON ", 260, 171);
-    // }
 }
 
 void SDSetup()
@@ -808,14 +579,7 @@ void SDLoop()
                 dataFile.print(", ");
                 dataFile.print(pH);
                 dataFile.print(", ");
-                dataFile.print(dht_dat[2], DEC);
-                dataFile.print(", ");
-                dataFile.print(dht_dat[0], DEC);
-                dataFile.print(", ");
-                dataFile.print(currentLightInLux);
-                dataFile.print(", ");
                 dataFile.print(pmem);
-
                 dataFile.println();
                 dataFile.close();
             }
