@@ -1,6 +1,5 @@
 #include <SD.h>       //SD card library
 #include <Wire.h>     //One Wire library
-#include <EEPROMex.h> //Extended Eeprom library
 
 #include <RTClib.h> //Real Time Clock library
 
@@ -58,15 +57,6 @@ double currentLightInLux; //              |
 double lightInputVoltage; //              |
 double lightResistance;   //              |
 
-int EepromSetpoint = 10;    // location of Setpoint in Eeprom
-int EepromSetHysteris = 20; // location of SetHysteris in Eeprom
-int EepromFanTemp = 40;     // location of FanTemp in Eeprom
-int EepromFanHumid = 60;    // location of FanHumid in Eeprom
-int EepromPinHighTime = 80; // location of pinHighTime in Eeprom
-int EepromPinLowTime = 100; // location of pinLowTime in Eeprom
-int EepromSmoothPh = 90;    // location of smoothPh in Eeprom
-int EepromLightTime = 120;  // locaiton of LightTime in Eeprom
-
 float LightOn;                              // Time the plants have had light
 float proportion_to_light = LightTime / 24; // calculate desired hours of light total and supplemental daily based on above values
 float seconds_light = 0;
@@ -81,7 +71,6 @@ DateTime now; // call current Date and Time
 // Every block is in a separate function.
 void setup() 
 {
-    EepromRead();       // Reads every value that is stored in Eeprom
     smoothArraySetup(); // Sets the array for smoothing the pH value to 0
     logicSetup();       // Replaces the void Setup
     timeSetup();        // Initialises the RTC module
