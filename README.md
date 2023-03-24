@@ -7,15 +7,18 @@
 - ESP 8266
 - pH Sensor
 - Ec Sensor
+- Temperature Sensor
 - RTC Module
 - SD Card
 - LCD 
 
+
 ## Software function
 
 - [x] Read sensor pH, Ec
-- [ ] Nutri control (with threshold)
 - [x] Read RTC
-- [ ] Send/Recieve data with ESP 8266
 - [x] Store data in SD card
+- [ ] Nutri control (with threshold)
 - [ ] Menu control in LCD
+- [ ] Send/Recieve data with ESP 8266
+
