@@ -1,7 +1,7 @@
 #include "DFRobot_PH.h"
 #include "DFRobot_EC.h"
 
-#include <LiquidCrystal.h>
+#include <LiquidCrystal_I2C.h>
 #include <LiquidMenu.h>
 
 #include <EEPROM.h>
@@ -11,10 +11,13 @@
 
 //****Screen and Menu Setting****//
 
-LiquidCrystal lcd(LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7); //Setting with Pin LCD
+LiquidCrystal_I2C lcd(0x3F, 16, 2);; //Setting with Pin LCD
 LiquidLine welcome_1(1, 0, "Nutri Auto");
 LiquidLine welcome_2(0,1, "Alo 123 456");
-LiquidScreen welcome(welcome_1,welcome_2);
+LiquidScreen welcomeScreen(welcome_1,welcome_2);
+LiquidLine notiEc(0,0,"EC: ",ecValue);
+LiquidLine notiPh(0,1,"PH: ",phValue);
+LiquidScreen notiScreen(notiEc,notiPh);
 LiquidMenu menu(lcd);
 
 //*** Button Setting ***//
@@ -42,13 +45,18 @@ void setup()
     ph.begin();
     ec.begin();
     SDSetup(); 
+    lcd.init();
+    lcd.backlight();
+    menu.init();
+    menu.add_screen(welcomeScreen);
+    menu.add_screen(notiScreen);
 }
 
 void loop()
 {
   readEcph();
   SDLoop();
-
+  menu.update();
 }
 
 //************* Read Sensor ******************//
@@ -120,4 +128,22 @@ void SDLoop()
         }
     }
 }
+//******* Button Check ***********//
 
+void buttonsCheck() {
+  if (right.check() == LOW) {
+    menu_system.next_screen();
+  }
+  if (left.check() == LOW) {
+    menu_system.previous_screen();
+  }
+  if (up.check() == LOW) {
+    menu_system.call_function(increase);
+  }
+  if (down.check() == LOW) {
+    menu_system.call_function(decrease);
+  }
+  if (enter.check() == LOW) {
+    menu_system.switch_focus();
+  }
+}
