@@ -25,4 +25,3 @@
 
 ## LCD Menu Doc
 https://github.com/VaSe7u/LiquidMenu
->>>>>>> 7a7691b ([Update] Update LCD Menu setting v1)
