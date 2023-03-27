@@ -20,11 +20,11 @@ Wiring:
 | ESp    |       TX      |      19         |
 |        |       RX      |      18         |
 |--------| ------------- | --------------- |
-|Button L|    Digital    |                 |
-|Button R|    Digital    |                 |
-|Button U|    Digital    |                 |
-|Button D|    Digital    |                 |
-|Button E|    Digital    |                 |
+|Button L|    Digital    |      44         |
+|Button R|    Digital    |      45         |
+|Button U|    Digital    |      46         |
+|Button D|    Digital    |      47         |
+|Button E|    Digital    |      48         |
 |--------| ------------- | --------------- |
 
 
