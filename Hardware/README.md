@@ -1,4 +1,5 @@
 # Hardware setting
+
 Wiring:
 
 |Name    | Jump          |   Arduino Mega  |          Thứ tự chân vẽ    |
@@ -34,5 +35,6 @@ Wiring:
 |--------| ------------- | --------------- |----------------------------|
 
 
-Mặt trước : LCD, RTC
-Mặt sau: Ph-Ec-SD-RTC
+Mặt trước : LCD, Button
+
+Mặt sau: Ph-Ec-SD-RTC-ESP
