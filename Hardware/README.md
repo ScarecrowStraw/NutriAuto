@@ -2,29 +2,34 @@
 Wiring:
 |Name    | Jump          |   Arduino Mega  |
 |--------| ------------- | --------------- |
-| LCD    |       SCL     |      21         |
+| LCD    |       SCL     |      21         | - + SDA SCL
 |        |       SDA     |      20         |
 |--------| ------------- | --------------- |
-| PH     |    Analog     |      A0         |
+| PH     |    Analog     |      A0         | - + A
 |--------| ------------- | --------------- |
-| EC     |    Analog     |      A1         |
+| EC     |    Analog     |      A1         | - + A
 |--------| ------------- | --------------- |
-| SDCard |       CS      |      53         |
+| SDCard |       CS      |      53         | CSC-CLK-MOSI-MISO- 5V - GND
 |        |       MOSI    |      51         |
 |        |       CLK     |      52         |
 |        |       MISO    |      50         |
 |--------| ------------- | --------------- |
-| RTC    |       SCL     |      21         |
-|        |       SDA     |      20         |
+| RTC    |       SCL     |      SCL trên   | SCL-SDA-VCC-GND
+|        |       SDA     |      SDA trên   |
 |--------| ------------- | --------------- |
-| ESp    |       TX      |      19         |
-|        |       RX      |      18         |
+| ESp    |       TX      |      14         | 5V- GND - TX- RX
+|        |       RX      |      15         |
 |--------| ------------- | --------------- |
-|Button L|    Digital    |      44         |
-|Button R|    Digital    |      45         |
-|Button U|    Digital    |      46         |
-|Button D|    Digital    |      47         |
-|Button E|    Digital    |      48         |
+|Button L|    Digital    |      18         | Thêm tụ từ nút bấm vào đầu vào arduino
+|Button R|    Digital    |      19         |
+|Button U|    Digital    |      20         |
+|Button D|    Digital    |      21         |
 |--------| ------------- | --------------- |
-
-
+| Relay  |   5v-GND      |                 | GND-1-2-3-4-VCC
+| Bơm 1  |      Digital  |       3         |
+| Bơm 2  |      Digital  |       4         |
+| bơm 3  |      Digital  |       5         |
+| Bơm 4  |      Digital  |       6         |
+|--------| ------------- | --------------- |
+Mặt trước : LCD, RTC
+Mặt sau: Ph-Ec-SD-RTC
