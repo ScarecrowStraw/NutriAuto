@@ -9,16 +9,30 @@
 #include <Wire.h>
 #include <SD.h> 
 
-//****Screen and Menu Setting****//
+//*** Setup ***///
+
+#define PH_PIN A1
+#define EC_PIN A2
+#define pumpEc 3
+#define pumpPh 4
+#define butMenu 18
+#define butOk 19
+#define butUp 20
+#define butDown 21
+
 float  voltagePH,voltageEC,phValue,ecValue,temperature = 25;
+float  phSetpoint,ecSetpoint;
+int pumpTime = 2000; 
+
+//****Screen and Menu Setting****//
 
 LiquidCrystal_I2C lcd(0x27, 16, 2); //Setting with Pin LCD
 
-LiquidLine welcome_1(1, 0, "Nutri Auto");
-LiquidLine welcome_2(0,1, "Alo 123 456");
+LiquidLine welcome_1(1, 0, "Nutri Auto Version 1.0");
+LiquidLine welcome_2(0,1, "Welcome");
 LiquidScreen welcomeScreen(welcome_1,welcome_2);
-LiquidLine notiEc(0,0,"EC: ",ecValue);
-LiquidLine notiPh(0,1,"PH: ",phValue);
+LiquidLine notiEc(0,0,"EC: ",readEc());
+LiquidLine notiPh(0,1,"PH: ",readPh());
 LiquidScreen notiScreen(notiEc,notiPh);
 LiquidMenu menu(lcd);
 
@@ -30,12 +44,6 @@ LiquidMenu menu(lcd);
 // Button down(9, pullup);
 // Button enter(10, pullup);
 
-//*** Sensor Setup ***///
-#define PH_PIN A1
-#define EC_PIN A2
-
-
-
 DFRobot_PH ph;
 DFRobot_EC ec;
 
@@ -46,12 +54,16 @@ void setup()
     Serial.begin(115200);  
     // ph.begin();
     // ec.begin();
-    // SDSetup(); 
+    // SDSetup();
+    buttonSetup();
     lcd.init();
     lcd.backlight();
     menu.init();
     menu.add_screen(welcomeScreen);
     menu.add_screen(notiScreen);
+    menu.change_screen(welcomeScreen);
+    menu.update();
+
 }
 
 void loop()
@@ -60,21 +72,48 @@ void loop()
   //SDLoop();
   menu.update();
   delay(10000);
-  menu.next_screen();
+}
+//************* Pump Control******************//
+
+void controlEc(){
+  while (readEc()< (ecSetpoint*0.97)){
+    digitalWrite(pumpEc,HIGH);
+    delay(pumpTime);
+    digitalWrite(pumpEc,LOW);
+  }
+}
+void controlPh(){
+  while (readPh()< (phSetpoint*0.97)){
+      digitalWrite(pumpPh,HIGH);
+      delay(pumptime);
+      digitalWrite(pumpPh,LOW);
+  }
+
 }
 
 //************* Read Sensor ******************//
 
-void readEcph(){
-  voltagePH = analogRead(PH_PIN)/1024.0*5000;          // read the ph voltage
-  phValue    = ph.readPH(voltagePH,temperature);       // convert voltage to pH with temperature compensation
-  Serial.print("pH:");
-  Serial.print(phValue,2);
+float readEc(){
   voltageEC = analogRead(EC_PIN)/1024.0*5000;
   ecValue    = ec.readEC(voltageEC,temperature);       // convert voltage to EC with temperature compensation
   Serial.print(", EC:");
   Serial.print(ecValue,2);
   Serial.println("ms/cm");
+  return ecValue;
+}
+
+float readPh(){
+  voltagePH = analogRead(PH_PIN)/1024.0*5000;          // read the ph voltage
+  phValue    = ph.readPH(voltagePH,temperature);       // convert voltage to pH with temperature compensation
+  Serial.print("pH:");
+  Serial.print(phValue,2);
+  return phValue;
+}
+
+void buttonSetup(){
+
+  
+
 }
 float readTemperature()
 {
