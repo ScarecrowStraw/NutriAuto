@@ -5,7 +5,7 @@
 #include <LiquidMenu.h>
 
 #include <EEPROM.h>
-#include <RTClib.h> 
+//#include <RTClib.h> 
 #include <Wire.h>
 #include <SD.h> 
 
@@ -23,6 +23,9 @@
 float  voltagePH,voltageEC,phValue,ecValue,temperature = 25;
 float  phSetpoint,ecSetpoint;
 int pumpTime = 2000; 
+
+float readEc();
+float readPh();
 
 //****Screen and Menu Setting****//
 
