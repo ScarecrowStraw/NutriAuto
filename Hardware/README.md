@@ -24,14 +24,14 @@ Wiring:
 |------------|---------------|-----------------|----------------------------|
 |Button Menu |    Digital    |      18         | Tụ từ nút bấm vào arduino  |
 |Button Ok   |    Digital    |      19         |                            |
-|Button U    |    Digital    |      20         |                            |
-|Button D    |    Digital    |      21         |                            |
+|Button U    |    Digital    |      20  -> 3       |                            |
+|Button D    |    Digital    |      21  -> 2       |                            |
 |------------|---------------|-----------------|----------------------------|
 | Relay      |   5v-GND      |                 | GND-1-2-3-4-VCC            |
-| Bơm 1      |      Digital  |       3         |  EC                        |
-| Bơm 2      |      Digital  |       4         |  PH                        |
-| bơm 3      |      Digital  |       5         |                            |
-| Bơm 4      |      Digital  |       6         |                            |
+| Bơm 1      |      Digital  |       3   ->   4   |  EC                        |
+| Bơm 2      |      Digital  |       4   ->   5   |  PH                        |
+| bơm 3      |      Digital  |       5   ->   6   |                            |
+| Bơm 4      |      Digital  |       6   ->   7   |                            |
 |------------|---------------|-----------------|----------------------------|
 
 
