@@ -31,11 +31,7 @@ float  phSetpoint= 25;
 float ecSetpoint = 25 ;
 int pumpTime = 2000; 
 
-<<<<<<< HEAD
-float readEc();
-float readPh();
-=======
->>>>>>> 73b9c0c ([Update] update menu setting + pump control)
+
 
 //****Screen and Menu Setting****//
 
@@ -210,6 +206,10 @@ void setup()
 //    ph.begin();
 //    ec.begin();
 //    SDSetup();
+    pinMode(4,OUTPUT);  //2
+    pinMode(5,OUTPUT);  //3
+    pinMode(6,OUTPUT);  //4
+    pinMode(7,OUTPUT);  //1
     lcd.init();
     lcd.backlight();
     pinMode(butMenu, INPUT);
@@ -230,6 +230,10 @@ void setup()
     delay(1000);
     menu.change_screen(&notiScreen);
     menu.update();
+    digitalWrite(7,HIGH);
+    digitalWrite(4,HIGH);
+    digitalWrite(5,HIGH);
+    digitalWrite(6,HIGH);
 }
 
 void loop()
