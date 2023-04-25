@@ -5,17 +5,18 @@
 #include <LiquidMenu.h>
 
 #include <EEPROM.h>
-//#include <RTClib.h> 
+#include "uRTCLib.h"
+#include <OneWire.h>
 #include <Wire.h>
 #include <SD.h> 
 
 //*** Setup ***///
 
-#define PH_PIN A15
-#define EC_PIN A14
-#define T_PIN A13
-#define pumpEc 3
-#define pumpPh 4
+#define PH_PIN A14
+#define EC_PIN A13
+#define T_PIN A15
+#define pumpEc 4
+#define pumpPh 5
 #define butMenu 3
 #define butOk 2
 #define butUp 18
@@ -30,18 +31,21 @@ float  voltagePH,voltageEC,phValue,ecValue,temperature = 25;
 float  phSetpoint= 25;
 float ecSetpoint = 25 ;
 int pumpTime = 2000; 
+unsigned long sdCurrentMillis,sdPreviousMillis;
+bool sdState = LOW;
 
-
-
+OneWire ds(T_PIN);
 //****Screen and Menu Setting****//
+
+uRTCLib RTC(0x68);
 
 LiquidCrystal_I2C lcd(0x27, 16, 2); //Setting with Pin LCD
 
 LiquidLine welcome_1(1, 0, "Nutri Auto 1.0");
 LiquidLine welcome_2(5,1, "Welcome");
 LiquidScreen welcomeScreen(welcome_1,welcome_2);
-LiquidLine notiEc(0,0,"EC: ",ecSetpoint);
-LiquidLine notiPh(0,1,"PH: ",phSetpoint);
+LiquidLine notiEc(0,0,"EC: ",ecValue);
+LiquidLine notiPh(0,1,"PH: ",phValue);
 LiquidScreen notiScreen(notiEc,notiPh);
 LiquidLine setupPh(0,0,"Set pH:",phSetpoint);
 LiquidLine setupEc(0,1,"Set EC:",ecSetpoint);
@@ -203,9 +207,9 @@ void interruptDown(){
 void setup()
 {
     Serial.begin(115200);  
-//    ph.begin();
-//    ec.begin();
-//    SDSetup();
+    ph.begin();
+    ec.begin();
+    SDSetup();
     pinMode(4,OUTPUT);  //2
     pinMode(5,OUTPUT);  //3
     pinMode(6,OUTPUT);  //4
@@ -239,129 +243,163 @@ void setup()
 void loop()
 {   
   screen_Update();
-  //readEcph();
-  //SDLoop();
+  readEc();
+  readPh();
+  controlEc();
+  controlPh();
+  SDLoop();
 }
 //************* Pump Control******************//
 
-//void controlEc(){
-//  while (readEc()< (ecSetpoint*0.97)){
-//    digitalWrite(pumpEc,HIGH);
-//    delay(pumpTime);
-//    digitalWrite(pumpEc,LOW);
-//  }
-//}
-//void controlPh(){
-//  while (readPh()< (phSetpoint*0.97)){
-//      digitalWrite(pumpPh,HIGH);
-//      delay(pumptime);
-//      digitalWrite(pumpPh,LOW);
-//  }
-//
-//}
+void controlEc(){
+ readEc();
+ while (ecValue < (ecSetpoint*0.97)){
+   readEc();
+   digitalWrite(pumpEc,);LOW
+   delay(pumpTime);
+   digitalWrite(pumpEc,HIGH);
+ }
+}
+void controlPh(){
+ readPh();
+ while (phValue< (phSetpoint*0.97)){
+    readPh();
+     digitalWrite(pumpPh,LOW);
+     delay(pumptime);
+     digitalWrite(pumpPh,HIGH);
+ }
+
+}
 
 //************* Read Sensor ******************//
 
-//float readEc(){
-//  voltageEC = analogRead(EC_PIN)/1024.0*5000;
-//  ecValue    = ec.readEC(voltageEC,temperature);       // convert voltage to EC with temperature compensation
-//  for(int i=0;i<9;i++){
-//      for(int j=i+1;j<10;j++){
-//        if(buffer_arr[i]>buffer_arr[j]){
-//          temp=buffer_arr[i];
-//          buffer_arr[i]=buffer_arr[j];
-//          buffer_arr[j]=temp;
-//        }
-//     }
-// }
-//  for(int i=2;i<8;i++)
-//    avgval+=buffer_arr[i];
-//    float volt=(float)avgval*5.0/1024/6;
-//    float ph_act = -5.70 * volt + calibration_value;
-//}
-//  return ph_act;
-//}
-//
-//float readPh(){
-//  voltagePH = analogRead(PH_PIN)/1024.0*5000;          // read the ph voltage
-//  phValue    = ph.readPH(voltagePH,temperature);       // convert voltage to pH with temperature compensation
-//  Serial.print("pH:");
-//  Serial.print(phValue,2);
-//  return phValue;
-//}
+float readEc(){
+static unsigned long timepoint = millis();
+    if(millis()-timepoint>1000U)  //time interval: 1s
+    {
+      timepoint = millis();
+      voltageEC = analogRead(EC_PIN)/1024.0*5000;  // read the voltage
+
+      readTemperature();  // read your temperature sensor to execute temperature compensation
+      ecValue =  ec.readEC(voltageEC,temperature);  // convert voltage to EC with temperature compensation
+      Serial.print("  temperature:");
+      Serial.print(temperature,1);
+      Serial.print("^C  EC:");
+      Serial.print(ecValue,1);
+      Serial.println("ms/cm");
+    }
+    ec.calibration(voltageEC,temperature);
+}
+
+void readPh(){
+  voltagePH = analogRead(PH_PIN)/1024.0*5000;          // read the ph voltage
+  phValue    = ph.readPH(voltagePH,temperature);       // convert voltage to pH with temperature compensation
+  Serial.print("pH:");
+  Serial.print(phValue,2);
+}
 
 float readTemperature()
 {
   //add your code here to get the temperature from your temperature sensor
+  float temperature = getTemp();
 }
 
+float getTemp(){
+  //returns the temperature from one DS18S20 in DEG Celsius
+
+  byte data[12];
+  byte addr[8];
+
+  if ( !ds.search(addr)) {
+      //no more sensors on chain, reset search
+      ds.reset_search();
+      return -1000;
+  }
+
+  if ( OneWire::crc8( addr, 7) != addr[7]) {
+      Serial.println("CRC is not valid!");
+      return -1000;
+  }
+
+  if ( addr[0] != 0x10 && addr[0] != 0x28) {
+      Serial.print("Device is not recognized");
+      return -1000;
+  }
+
+  ds.reset();
+  ds.select(addr);
+  ds.write(0x44,1); // start conversion, with parasite power on at the end
+
+  byte present = ds.reset();
+  ds.select(addr);
+  ds.write(0xBE); // Read Scratchpad
+
+
+  for (int i = 0; i < 9; i++) { // we need 9 bytes
+    data[i] = ds.read();
+  }
+
+  ds.reset_search();
+
+  byte MSB = data[1];
+  byte LSB = data[0];
+
+  float tempRead = ((MSB << 8) | LSB); //using two's compliment
+  float TemperatureSum = tempRead / 16;
+
+  return TemperatureSum;
+
+}
 //************** SD Card ***************//
 
-// void SDSetup()
-// {
-//     pinMode(53, OUTPUT);
+void SDSetup()
+{
+    pinMode(53, OUTPUT);
 
-//     if (!SD.begin(chipSelect))
-//     {
-//         return;
-//     }
-// }
+    if (!SD.begin(53))
+    {
+        return;
+    }
+}
 
-// void SDLoop()
-// {
-//     unsigned long sdCurrentMillis = millis();
-//     if (sdCurrentMillis - sdPreviousMillis > sdTime)
-//     {
-//         sdPreviousMillis = sdCurrentMillis;
-//         if (sdState == LOW)
-//         {
-//             sdState = HIGH;
-//             File dataFile = SD.open("datalog.csv", FILE_WRITE);
+void SDLoop()
+{
+    unsigned long sdCurrentMillis = millis();
+    if (sdCurrentMillis - sdPreviousMillis > 3000)
+    {
+        sdPreviousMillis = sdCurrentMillis;
+        if (sdState == LOW)
+        {
+            sdState = HIGH;
+            File dataFile = SD.open("datalog.csv", FILE_WRITE);
 
-//             if (dataFile)
-//             {
-//                 now = RTC.now();
-//                 dataFile.print(now.day(), DEC);
-//                 dataFile.print('/');
-//                 dataFile.print(now.month(), DEC);
-//                 dataFile.print('/');
-//                 dataFile.print(now.year(), DEC);
-//                 dataFile.print(' ');
-//                 dataFile.print(now.hour(), DEC);
-//                 dataFile.print(':');
-//                 dataFile.print(now.minute(), DEC);
-//                 dataFile.print(':');
-//                 dataFile.print(now.second(), DEC);
-//                 dataFile.print(", ");
-//                 dataFile.print(pH);
-//                 dataFile.print(", ");
-//                 dataFile.print(pmem);
-//                 dataFile.println();
-//                 dataFile.close();
-//             }
-//         }
-//         else
-//         {
-//             sdState = LOW;
-//         }
-//     }
-// }
-//******* Button Check ***********//
-
-// void buttonsCheck() {
-//   if (right.check() == LOW) {
-//     menu_system.next_screen();
-//   }
-//   if (left.check() == LOW) {
-//     menu_system.previous_screen();
-//   }
-//   if (up.check() == LOW) {
-//     menu_system.call_function(increase);
-//   }
-//   if (down.check() == LOW) {
-//     menu_system.call_function(decrease);
-//   }
-//   if (enter.check() == LOW) {
-//     menu_system.switch_focus();
-//   }
-// }
+            if (dataFile)
+            {
+//                DateTime now = RTC.now();
+                dataFile.print(RTC.day(), DEC);
+                dataFile.print('/');
+                dataFile.print(RTC.month(), DEC);
+                dataFile.print('/');
+                dataFile.print(RTC.year(), DEC);
+                dataFile.print(' ');
+                dataFile.print(RTC.hour(), DEC);
+                dataFile.print(':');
+                dataFile.print(RTC.minute(), DEC);
+                dataFile.print(':');
+                dataFile.print(RTC.second(), DEC);
+                dataFile.print(", ");
+                dataFile.print(phValue);
+                dataFile.print(", ");
+                dataFile.print(ecValue);
+                dataFile.print(", ");
+                dataFile.print(temperature);
+                dataFile.println();
+                dataFile.close();
+            }
+        }
+        else
+        {
+            sdState = LOW;
+        }
+    }
+}
