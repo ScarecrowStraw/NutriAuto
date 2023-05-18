@@ -13,31 +13,158 @@
 //*** Setup ***///
 
 #define PH_PIN A14
-#define EC_PIN A13
-#define T_PIN A15
+#define EC_PIN A15
+#define T_PIN 10
 #define pumpEc 4
-#define pumpPh 5
-#define butMenu 3
-#define butOk 2
-#define butUp 18
+#define pumpPh 8 
+#define butMenu 18 
+#define butOk 3
+#define butUp 2
 #define butDown 19
-#define pumptime 500
+#define pumptime 3000
 
+bool isFirst = true;
+float ecArray[20];
+float phArray[20];
 bool changed = 0;
-int screenState = 1;
+int screenState = 0;
 int lineState = 0;
 unsigned long lastInterrupt;
-float  voltagePH,voltageEC,phValue,ecValue,temperature = 25;
-float  phSetpoint= 25;
-float ecSetpoint = 25 ;
+float  voltagePH,voltageEC,phValue,ecValue,temperature = 0.0;
+static unsigned long timepoint;
+float  phSetpoint= 7.0;
+float ecSetpoint = 0.5 ;
 int pumpTime = 2000; 
 unsigned long sdCurrentMillis,sdPreviousMillis;
 bool sdState = LOW;
-
+bool stateRead = 0;
 OneWire ds(T_PIN);
 //****Screen and Menu Setting****//
-
+//
 uRTCLib RTC(0x68);
+
+DFRobot_PH ph;
+DFRobot_EC ec;
+float average (float * array, float newValue)  // assuming array is int.
+{
+  float sum = 0.0 ;  // sum will be larger than an item, long for safety.
+  for (int i = 0; i < 9 ;i++){
+    array[i] = array[i+1];
+  }
+  array[9] = newValue;
+  for (int i = 0 ; i < 10 ; i++){
+    sum += array[i] ;
+  }
+  return   sum/10.0;  // average will be fractional, so float may be appropriate.
+}
+float getTemp(){
+  //returns the temperature from one DS18S20 in DEG Celsius
+
+  byte data[12];
+  byte addr[8];
+
+  if ( !ds.search(addr)) {
+      //no more sensors on chain, reset search
+      ds.reset_search();
+      return -1000;
+  }
+
+  if ( OneWire::crc8( addr, 7) != addr[7]) {
+      Serial.println("CRC is not valid!");
+      return -1000;
+  }
+
+  if ( addr[0] != 0x10 && addr[0] != 0x28) {
+      Serial.print("Device is not recognized");
+      return -1000;
+  }
+
+  ds.reset();
+  ds.select(addr);
+  ds.write(0x44,1); // start conversion, with parasite power on at the end
+
+  byte present = ds.reset();
+  ds.select(addr);
+  ds.write(0xBE); // Read Scratchpad
+
+
+  for (int i = 0; i < 9; i++) { // we need 9 bytes
+    data[i] = ds.read();
+  }
+
+  ds.reset_search();
+
+  byte MSB = data[1];
+  byte LSB = data[0];
+ 
+  float tempRead = ((MSB << 8) | LSB); //using two's compliment
+  float TemperatureSum = tempRead / 16;
+
+  return TemperatureSum;
+
+} 
+float readTemperature()
+{
+  //add your code here to get the temperature from your temperature sensor
+  float temperature = getTemp();
+  return temperature;
+}   
+
+float readEcph(){
+    
+    if(millis()-timepoint > 10000)  //time interval: 1s
+    { 
+      if (stateRead == 0){
+        digitalWrite(7,LOW);
+        digitalWrite(6,LOW);
+        delay(100);
+        int i = 0;
+        while(i<10){
+        voltageEC = analogRead(EC_PIN)/1024.0*5000;  // read the voltage
+        temperature = readTemperature();  // read your temperature sensor to execute temperature compensation
+        if(ec.readEC(voltageEC,temperature)>=0.05){
+          ecValue = average(ecArray,ec.readEC(voltageEC,temperature))+0.23;  
+        }
+        else{
+          ecValue = average(ecArray,ec.readEC(voltageEC,temperature));
+        }
+        
+        Serial.print(ec.readEC(voltageEC,temperature));
+        Serial.print(" ");
+        ec.calibration(voltageEC,temperature);
+        i++;
+        delay(100);
+        }  
+        digitalWrite(7,HIGH);
+        digitalWrite(6,HIGH);
+        timepoint = millis();
+        stateRead = 1;
+      }
+      else {
+        int j = 0;
+        while(j< 10){
+        voltagePH = analogRead(PH_PIN)/1024.0*5000;
+        temperature = readTemperature();
+        ph.readPH(voltagePH,temperature); // read the ph voltage
+        
+        phValue    = average(phArray,ph.readPH(voltagePH,temperature))+0.25;
+        
+        Serial.print(phValue);
+        Serial.println(" ");  
+    // convert voltage to pH with temperature compensation
+        ph.calibration(voltagePH,temperature);
+        j++;
+        delay(100);
+      }
+        timepoint = millis();
+        stateRead = 0;
+        }
+    }
+}
+
+
+
+
 
 LiquidCrystal_I2C lcd(0x27, 16, 2); //Setting with Pin LCD
 
@@ -46,7 +173,8 @@ LiquidLine welcome_2(5,1, "Welcome");
 LiquidScreen welcomeScreen(welcome_1,welcome_2);
 LiquidLine notiEc(0,0,"EC: ",ecValue);
 LiquidLine notiPh(0,1,"PH: ",phValue);
-LiquidScreen notiScreen(notiEc,notiPh);
+LiquidLine notiT(10,0,getTemp);
+LiquidScreen notiScreen(notiEc,notiPh,notiT);
 LiquidLine setupPh(0,0,"Set pH:",phSetpoint);
 LiquidLine setupEc(0,1,"Set EC:",ecSetpoint);
 LiquidScreen setupScreen(setupPh,setupEc);
@@ -62,8 +190,6 @@ LiquidMenu menu(lcd,notiScreen,setupScreen,phsetupScreen,ecsetupScreen);
 
 
 
-DFRobot_PH ph;
-DFRobot_EC ec;
 
 void screen_Update(){
   switch (screenState){
@@ -109,48 +235,47 @@ void screen_Update(){
       break;
       case 7: 
         if(changed){
-          phSetpoint = phSetpoint+ 0.1;
+          phSetpoint = phSetpoint + 0.1;
           menu.update();
           changed = 0;
         }
       break;
       case 8: 
         if(changed){
-          phSetpoint = phSetpoint- 0.1;
+          phSetpoint = phSetpoint - 0.1;
           menu.update();
           changed = 0;
         }
       break;
       case 9: 
         if(changed){
-          ecSetpoint = ecSetpoint+ 0.1;
+          ecSetpoint = ecSetpoint+ 0.05;
           menu.update();
           changed = 0;
         }
       break;
       case 10: 
         if(changed){
-          ecSetpoint = ecSetpoint- 0.1;
+          ecSetpoint = ecSetpoint- 0.05;
           menu.update();
           changed = 0;
         }
       break;
   
   }
-  Serial.println(phSetpoint);
 }
 
 void interruptMenu(){
-  if(millis() - lastInterrupt > 30) // we set a 10ms no-interrupts window
-    {    
-    lastInterrupt = millis();
-    Serial.println("okkk");
+  if(millis() - lastInterrupt > 30 && isFirst) // we set a 10ms no-interrupts window
+    {   
+      isFirst = false; 
+    }
+    else 
+    {
+      lastInterrupt = millis();
     screenState = 2;
     changed = 1;
     }
-  
- 
-
 }
 void interruptOk(){
   if(millis() - lastInterrupt > 30){ 
@@ -210,20 +335,21 @@ void setup()
     ph.begin();
     ec.begin();
     SDSetup();
-    pinMode(4,OUTPUT);  //2
-    pinMode(5,OUTPUT);  //3
-    pinMode(6,OUTPUT);  //4
-    pinMode(7,OUTPUT);  //1
+    pinMode(4,OUTPUT);  //EC1
+    pinMode(8,OUTPUT);  //EC2
+    pinMode(6,OUTPUT);  //PH
+    pinMode(7,OUTPUT);  //EC
+    pinMode(9,INPUT);
     lcd.init();
     lcd.backlight();
     pinMode(butMenu, INPUT);
     pinMode(butOk,INPUT);
     pinMode(butUp,INPUT);
     pinMode(butDown,INPUT);
-    attachInterrupt(digitalPinToInterrupt(butMenu),interruptMenu, RISING);
-    attachInterrupt(digitalPinToInterrupt(butOk),interruptOk, RISING);
-    attachInterrupt(digitalPinToInterrupt(butUp),interruptUp, RISING);
-    attachInterrupt(digitalPinToInterrupt(butDown),interruptDown, RISING);
+    digitalWrite(7,HIGH);
+    digitalWrite(4,HIGH);
+    digitalWrite(8,HIGH);
+    digitalWrite(6,HIGH);
     menu.init();
     menu.add_screen(welcomeScreen);
     menu.add_screen(notiScreen);
@@ -231,127 +357,75 @@ void setup()
     menu.add_screen(phsetupScreen);
     menu.add_screen(ecsetupScreen);
     menu.change_screen(&welcomeScreen);
-    delay(1000);
     menu.change_screen(&notiScreen);
     menu.update();
-    digitalWrite(7,HIGH);
-    digitalWrite(4,HIGH);
-    digitalWrite(5,HIGH);
-    digitalWrite(6,HIGH);
+    attachInterrupt(digitalPinToInterrupt(butMenu),interruptMenu, RISING);
+    attachInterrupt(digitalPinToInterrupt(butOk),interruptOk, RISING);
+    attachInterrupt(digitalPinToInterrupt(butUp),interruptUp, RISING);
+    attachInterrupt(digitalPinToInterrupt(butDown),interruptDown, RISING);
+    
+
+    delay(1000);
+
+    int i = 0;
+    for (i = 0; i < 20; i++)
+    {
+      ecArray[i] = 0.0;
+      phArray[i] = 0.0;
+    }
+
+    timepoint = millis(); 
 }
 
 void loop()
 {   
+  readEcph();
   screen_Update();
-  readEc();
-  readPh();
+  menu.update();
+  
   controlEc();
-  controlPh();
-  SDLoop();
+//  SDLoop();
+  delay(100);
 }
 //************* Pump Control******************//
 
 void controlEc(){
- readEc();
- while (ecValue < (ecSetpoint*0.97)){
-   readEc();
-   digitalWrite(pumpEc,);LOW
-   delay(pumpTime);
+Serial.print(ecValue);
+Serial.print(" ");
+  Serial.print(ecSetpoint);
+  Serial.println(" ");
+ if (ecValue <= (ecSetpoint)&& ecValue >=0.25){
+    digitalWrite(pumpEc,LOW);
+ }
+ else{
+   
    digitalWrite(pumpEc,HIGH);
+   controlPh();
  }
 }
 void controlPh(){
- readPh();
- while (phValue< (phSetpoint*0.97)){
-    readPh();
-     digitalWrite(pumpPh,LOW);
-     delay(pumptime);
-     digitalWrite(pumpPh,HIGH);
+  Serial.print(phValue);
+  Serial.print(" ");
+  Serial.print(phSetpoint);
+  Serial.println(" ");
+ if (phValue >= (phSetpoint)){
+     digitalWrite(pumpPh,LOW);  
+     Serial.println("?");
+      
  }
+ else {
+     digitalWrite(pumpPh,HIGH);
+     Serial.println("????");
+ }
+
 
 }
 
 //************* Read Sensor ******************//
 
-float readEc(){
-static unsigned long timepoint = millis();
-    if(millis()-timepoint>1000U)  //time interval: 1s
-    {
-      timepoint = millis();
-      voltageEC = analogRead(EC_PIN)/1024.0*5000;  // read the voltage
 
-      readTemperature();  // read your temperature sensor to execute temperature compensation
-      ecValue =  ec.readEC(voltageEC,temperature);  // convert voltage to EC with temperature compensation
-      Serial.print("  temperature:");
-      Serial.print(temperature,1);
-      Serial.print("^C  EC:");
-      Serial.print(ecValue,1);
-      Serial.println("ms/cm");
-    }
-    ec.calibration(voltageEC,temperature);
-}
-
-void readPh(){
-  voltagePH = analogRead(PH_PIN)/1024.0*5000;          // read the ph voltage
-  phValue    = ph.readPH(voltagePH,temperature);       // convert voltage to pH with temperature compensation
-  Serial.print("pH:");
-  Serial.print(phValue,2);
-}
-
-float readTemperature()
-{
-  //add your code here to get the temperature from your temperature sensor
-  float temperature = getTemp();
-}
-
-float getTemp(){
-  //returns the temperature from one DS18S20 in DEG Celsius
-
-  byte data[12];
-  byte addr[8];
-
-  if ( !ds.search(addr)) {
-      //no more sensors on chain, reset search
-      ds.reset_search();
-      return -1000;
-  }
-
-  if ( OneWire::crc8( addr, 7) != addr[7]) {
-      Serial.println("CRC is not valid!");
-      return -1000;
-  }
-
-  if ( addr[0] != 0x10 && addr[0] != 0x28) {
-      Serial.print("Device is not recognized");
-      return -1000;
-  }
-
-  ds.reset();
-  ds.select(addr);
-  ds.write(0x44,1); // start conversion, with parasite power on at the end
-
-  byte present = ds.reset();
-  ds.select(addr);
-  ds.write(0xBE); // Read Scratchpad
-
-
-  for (int i = 0; i < 9; i++) { // we need 9 bytes
-    data[i] = ds.read();
-  }
-
-  ds.reset_search();
-
-  byte MSB = data[1];
-  byte LSB = data[0];
-
-  float tempRead = ((MSB << 8) | LSB); //using two's compliment
-  float TemperatureSum = tempRead / 16;
-
-  return TemperatureSum;
-
-}
 //************** SD Card ***************//
-
+//
 void SDSetup()
 {
     pinMode(53, OUTPUT);

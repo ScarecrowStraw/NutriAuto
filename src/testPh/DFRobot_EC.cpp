@@ -1,221 +1,453 @@
 /*
- * file DFRobot_EC.cpp
- * @ https://github.com/DFRobot/DFRobot_EC
- *
- * Arduino library for Gravity: Analog Electrical Conductivity Sensor / Meter Kit V2 (K=1), SKU: DFR0300
- *
- * Copyright   [DFRobot](http://www.dfrobot.com), 2018
- * Copyright   GNU Lesser General Public License
- *
- * version  V1.01
- * date  2018-06
- */
+    ------ Waspmote Pro Code Example --------
 
+    Explanation: This is the basic Code for Waspmote Pro
 
-#if ARDUINO >= 100
-#include "Arduino.h"
-#else
-#include "WProgram.h"
-#endif
+    Copyright (C) 2016 Libelium Comunicaciones Distribuidas S.L.
+    http://www.libelium.com
 
-#include "DFRobot_EC.h"
-#include <EEPROM.h>
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-#define EEPROM_write(address, p) {int i = 0; byte *pp = (byte*)&(p);for(; i < sizeof(p); i++) EEPROM.write(address+i, pp[i]);}
-#define EEPROM_read(address, p)  {int i = 0; byte *pp = (byte*)&(p);for(; i < sizeof(p); i++) pp[i]=EEPROM.read(address+i);}
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-#define KVALUEADDR 0x0A    //the start address of the K value stored in the EEPROM
-#define RES2 820.0
-#define ECREF 200.0
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
-DFRobot_EC::DFRobot_EC()
+#include <WaspWIFI_PRO_V3.h>
+#include <WaspSensorXtr.h>
+
+// choose socket (SELECT USER'S SOCKET)
+///////////////////////////////////////
+uint8_t socket = SOCKET0;
+///////////////////////////////////////
+
+// WiFi AP settings (CHANGE TO USER'S AP)
+///////////////////////////////////////
+char SSID[] = "K_CNNN";
+char PASSW[] = "congnghenn";
+//char SSID[] = "Mai Phuc Lam";
+//char PASSW[] = "05100912";
+
+//char SSID[] = "AVITECH_IDS2";
+//char PASSW[] = "avitechuet";
+///////////////////////////////////////
+
+//Variables use to connect to AP
+uint8_t error;
+uint8_t status;
+unsigned long previous;
+
+//MQTT server, port, username and password to public to topic
+//char MQTT_SERVER[] = "513booyoungct4.ddns.net";
+//uint16_t MQTT_PORT = 1883;
+//char username[] = "admin";
+//char password[] = "admin13589";
+
+//MQTT server, port, username and password to public to topic (MQTT broker on embedded computer)
+char MQTT_SERVER[] = "192.168.1.13";
+uint16_t MQTT_PORT = 1883;
+char username[]= "libe";
+char password[]= "123456";
+
+//Variable to use with weather station
+weatherStation mySensor;
+uint8_t response = 0;
+
+void setup()
 {
-    this->_ecvalue                = 0.0;
-    this->_kvalue                 = 1.0;
-    this->_kvalueLow              = 1.0;
-    this->_kvalueHigh             = 1.0;
-    this->_cmdReceivedBufferIndex = 0;
-    this->_voltage                = 0.0;
-    this->_temperature            = 25.0;
+  USB.ON();
+  USB.println(F("Start program"));
+
+ //////////////////////////////////////////////////
+  // 1. Switch ON weather station to read
+  //////////////////////////////////////////////////
+  
+  mySensor.ON();
+  
+  //Recommended waiting time since power on
+  delay(10000);
+
+  //////////////////////////////////////////////////
+  // 2. Configure Wifi conection
+  //////////////////////////////////////////////////
+  configure_Wifi();
+  
+  //////////////////////////////////////////////////
+  // 3. Configure HTTP conection
+  //////////////////////////////////////////////////
+
+  //error = WIFI_PRO_V3.mqttConfiguration(HTTP_SERVER,"user", HTTP_PORT, WaspWIFI_v3::MQTT_TLS_DISABLED);
+  error = WIFI_PRO_V3.mqttConfiguration(MQTT_SERVER, "user", MQTT_PORT, 0, username, password);
+  if (error == 0)
+  {
+    USB.println(F("3. MQTT conection configured"));
+  }
+  else
+  {
+    USB.print(F("3. MQTT conection configured ERROR"));
+  }
+  
+}
+
+void loop()
+{
+  // Check if Wifi is connected or not
+  while (WIFI_PRO_V3.isConnected() == false)
+  {
+    configure_Wifi();
+  }
+  //////////////////////////////////////////////////
+  // 4. Read data from weather station
+  //////////////////////////////////////////////////
+  response = mySensor.read();
+  while (response == 0)
+  {
+    //USB.println(response);
+    USB.println(F("Sensor not connected or invalid data"));
+    mySensor.OFF();
+    delay(3000);
+    mySensor.ON();
+  //  delay(5000);
+    delay(10000);
+    response = mySensor.read();
+  }
+
+  //USB.println(response);
+  USB.println(F("Sensor connected "));
+  printWeatherData_to_SerialMonitor();
+  
+  //Parameters needed in Direction project
+  uint16_t solarRadiation = mySensor.gmx.solarRadiation; // (W/m2)
+  float rainFall = mySensor.gmx.precipTotal; // mySensor.gmx.precipIntensity (mm)
+  uint16_t relativeHumidity = mySensor.gmx.relativeHumidity; //measured relativeHumidity in %
+  float temperature = mySensor.gmx.temperature; //(degree celsius)
+  float windSpeed = mySensor.gmx.windSpeed; //mySensor.gmx.avgWindSpeed (m/s)
+//  char* timestamp;
+//  timestamp = mySensor.gmx.timestamp;
+  
+   
+  //delay(5000);
+
+  //////////////////////////////////////////////////
+  // 5. Public data to MQTT broker
+  //////////////////////////////////////////////////
+
+//  uint16_t solarRadiation = 15000; // (W/m2)
+//  float rainFall = 1200.55; // mySensor.gmx.precipIntensity (mm)
+//  uint16_t relativeHumidity = 10000; //measured relativeHumidity in %
+//  float temperature = 28.75; //(degree celsius)
+//  float windSpeed = 1121.123; //mySensor.gmx.avgWindSpeed (m/s)
+  //char timestamp[22] = "19-03-2023T17:00:00";
+  
+  
+  //Prepare message to public to MQTT broker
+  char message[100];
+  char solarRadiation_string[10];
+  char rainFall_string[10];
+  char relativeHumidity_string[10];
+  char temperature_string[10];
+  char windSpeed_string[10];
+ 
+  dtostrf(solarRadiation, 1, 0, solarRadiation_string);
+  dtostrf(rainFall, 4, 2, rainFall_string);
+  dtostrf(relativeHumidity, 1, 0, relativeHumidity_string);
+  dtostrf(temperature, 4, 2, temperature_string);
+  dtostrf(windSpeed, 4, 2, windSpeed_string);
+  //rad 50;rai 12.550;hu 100;tem 28.750;win 2.123
+
+  sprintf(message, "rad: %s;rai: %s;h: %s;t: %s;w: %s", solarRadiation_string, rainFall_string, relativeHumidity_string, temperature_string, windSpeed_string);
+  //sprintf(message, "radi %s;rain %s;humi %s;temp %s;wind %s", solarRadiation_string, rainFall_string, relativeHumidity_string, temperature_string, windSpeed_string);
+  //sprintf(message, "radiation %s;rainFall %s;relativeHumidity %s", solarRadiation_string, rainFall_string, relativeHumidity_string);
+  USB.println(message);
+  
+ //Public message to MQTT broker
+  error = WIFI_PRO_V3.mqttPublishTopic("/sensor/weatherStation",WaspWIFI_v3::QOS_2,WaspWIFI_v3::RETAINED, message);
+  if (error == 0)
+  {
+    USB.println(F("Publish message done!"));
+  }
+  else
+  {
+    USB.println(F("Error publishing message to topic!"));
+  }
+
+ delay(30000);
+ //delay(1000);
+ 
+}
+
+void printWeatherData_to_SerialMonitor()
+{
+  USB.println(F("---------------------------"));
+    USB.println(F("GMX"));
+
+    USB.print(F("Wind direction: "));
+    USB.print(mySensor.gmx.windDirection);
+    USB.println(F(" degrees"));
+
+    USB.print(F("Avg. wind dir: "));
+    USB.print(mySensor.gmx.avgWindDirection);
+    USB.println(F(" degrees"));
+
+    USB.print(F("Cor. wind dir: "));
+    USB.print(mySensor.gmx.correctedWindDirection);
+    USB.println(F(" degrees"));
+
+    USB.print(F("Avg. cor. wind dir:"));
+    USB.print(mySensor.gmx.avgCorrectedWindDirection);
+    USB.println(F(" degrees"));
+
+    USB.print(F("Avg. wind gust dir: "));
+    USB.print(mySensor.gmx.avgWindGustDirection);
+    USB.println(F(" degrees"));
+
+    USB.print(F("Wind speed: "));
+    USB.printFloat(mySensor.gmx.windSpeed, 2);
+    USB.println(F(" m/s"));
+
+    USB.print(F("Avg. wind speed: "));
+    USB.printFloat(mySensor.gmx.avgWindSpeed, 2);
+    USB.println(F(" m/s"));
+
+    USB.print(F("Avg. wind gust speed:"));
+    USB.printFloat(mySensor.gmx.avgWindGustSpeed, 2);
+    USB.println(F(" m/s"));
+
+    USB.print(F("Wind sensor status: "));
+    USB.println(mySensor.gmx.windSensorStatus);
+
+    USB.print(F("Precip. total: "));
+    USB.printFloat(mySensor.gmx.precipTotal, 3);
+    USB.println(F(" mm"));
+
+    USB.print(F("Precip. int: "));
+    USB.printFloat(mySensor.gmx.precipIntensity, 3);
+    USB.println(F(" mm"));
+
+    USB.print(F("Precip. status: "));
+    USB.println(mySensor.gmx.precipStatus, DEC);
+    
+    USB.print(F("Solar radiation: "));
+    USB.print(mySensor.gmx.solarRadiation);
+    USB.println(F(" W/m^2"));
+
+    USB.print(F("Sunshine hours: "));
+    USB.printFloat(mySensor.gmx.sunshineHours, 2);
+    USB.println(F(" hours"));
+
+    USB.print(F("Sunrise: "));
+    USB.print(mySensor.gmx.sunriseTime);
+    USB.println(F(" (h:min)"));
+
+    USB.print(F("Solar noon: "));
+    USB.print(mySensor.gmx.solarNoonTime);
+    USB.println(F(" (h:min)"));
+
+    USB.print(F("Sunset: "));
+    USB.print(mySensor.gmx.sunsetTime);
+    USB.println(F(" (h:min)"));
+
+    USB.print(F("Sun position: "));
+    USB.print(mySensor.gmx.sunPosition);
+    USB.println(F(" (degrees:degrees)"));
+
+    USB.print(F("Twilight civil: "));
+    USB.print(mySensor.gmx.twilightCivil);
+    USB.println(F(" (h:min)"));
+
+    USB.print(F("Twilight nautical: "));
+    USB.print(mySensor.gmx.twilightNautical);
+    USB.println(F(" (h:min)"));
+
+    USB.print(F("Twilight astronomical: "));
+    USB.print(mySensor.gmx.twilightAstronom);
+    USB.println(F(" (h:min)"));
+    
+    USB.print(F("Barometric pressure: "));
+    USB.printFloat(mySensor.gmx.pressure, 1);
+    USB.println(F(" hPa"));
+
+    USB.print(F("Pressure at sea level: "));
+    USB.printFloat(mySensor.gmx.pressureSeaLevel, 1);
+    USB.println(F(" hPa"));
+
+    USB.print(F("Pressure at station: "));
+    USB.printFloat(mySensor.gmx.pressureStation, 1);
+    USB.println(F(" hPa"));
+
+    USB.print(F("Relative humidity: "));
+    USB.print(mySensor.gmx.relativeHumidity);
+    USB.println(F(" %"));
+
+    USB.print(F("Air temperature: "));
+    USB.printFloat(mySensor.gmx.temperature, 1);
+    USB.println(F(" Celsius degrees"));
+
+    USB.print(F("Dew point: "));
+    USB.printFloat(mySensor.gmx.dewpoint, 1);
+    USB.println(F(" degrees"));
+
+    USB.print(F("Absolute humidity: "));
+    USB.printFloat(mySensor.gmx.absoluteHumidity, 2);
+    USB.println(F(" g/m^3"));
+
+    USB.print(F("Air density: "));
+    USB.printFloat(mySensor.gmx.airDensity, 1);
+    USB.println(F(" Kg/m^3"));
+
+    USB.print(F("Wet bulb temperature: "));
+    USB.printFloat(mySensor.gmx.wetBulbTemperature, 1);
+    USB.println(F(" Celsius degrees"));
+
+    USB.print(F("Wind chill: "));
+    USB.printFloat(mySensor.gmx.windChill,1);
+    USB.println(F(" Celsius degrees"));
+    
+    USB.print(F("Heat index: "));
+    USB.print(mySensor.gmx.heatIndex);
+    USB.println(F(" Celsius degrees"));
+    
+    USB.print(F("Compass: "));
+    USB.print(mySensor.gmx.compass);
+    USB.println(F(" degrees"));
+
+    USB.print(F("X tilt: "));
+    USB.printFloat(mySensor.gmx.xTilt, 0);
+    USB.println(F(" degrees"));
+
+    USB.print(F("Y tilt: "));
+    USB.printFloat(mySensor.gmx.yTilt, 0);
+    USB.println(F(" degrees"));
+
+    USB.print(F("Z orient: "));
+    USB.printFloat(mySensor.gmx.zOrient, 0);
+    USB.println();
+
+    USB.print(F("Timestamp: "));
+    USB.println(mySensor.gmx.timestamp);
+
+    USB.print(F("Voltage: "));
+    USB.printFloat(mySensor.gmx.supplyVoltage, 1);
+    USB.println(F(" V"));
+
+    USB.print(F("Status: "));
+    USB.println(mySensor.gmx.status);
+    
+    USB.println(F("---------------------------\n"));
+  
 } 
 
-DFRobot_EC::~DFRobot_EC()
+void configure_Wifi()
 {
+  //////////////////////////////////////////////////
+  // 1. Switch ON the WiFi module
+  //////////////////////////////////////////////////
+  error = WIFI_PRO_V3.ON(socket);
 
-}
+  if (error == 0)
+  {
+    USB.println(F("1. WiFi switched ON"));
+  }
+  else
+  {
+    USB.println(F("1. WiFi did not initialize correctly"));
+  }
 
-void DFRobot_EC::begin()
-{
-    EEPROM_read(KVALUEADDR, this->_kvalueLow);        //read the calibrated K value from EEPROM
-    if(EEPROM.read(KVALUEADDR)==0xFF && EEPROM.read(KVALUEADDR+1)==0xFF && EEPROM.read(KVALUEADDR+2)==0xFF && EEPROM.read(KVALUEADDR+3)==0xFF){
-        this->_kvalueLow = 1.0;                       // For new EEPROM, write default value( K = 1.0) to EEPROM
-        EEPROM_write(KVALUEADDR, this->_kvalueLow);
-    }
-    EEPROM_read(KVALUEADDR+4, this->_kvalueHigh);     //read the calibrated K value from EEPRM
-    if(EEPROM.read(KVALUEADDR+4)==0xFF && EEPROM.read(KVALUEADDR+5)==0xFF && EEPROM.read(KVALUEADDR+6)==0xFF && EEPROM.read(KVALUEADDR+7)==0xFF){
-        this->_kvalueHigh = 1.0;                      // For new EEPROM, write default value( K = 1.0) to EEPROM
-        EEPROM_write(KVALUEADDR+4, this->_kvalueHigh);
-    }
-    this->_kvalue =  this->_kvalueLow;                // set default K value: K = kvalueLow
-}
+  //////////////////////////////////////////////////
+  // 2. Reset to default values
+  //////////////////////////////////////////////////
+  error = WIFI_PRO_V3.resetValues();
 
-float DFRobot_EC::readEC(float voltage, float temperature)
-{
-    float value = 0,valueTemp = 0;
-    this->_rawEC = 1000*voltage/RES2/ECREF;
-    valueTemp = this->_rawEC * this->_kvalue;
-    //automatic shift process
-    //First Range:(0,2); Second Range:(2,20)
-    if(valueTemp > 2.5){
-        this->_kvalue = this->_kvalueHigh;
-    }else if(valueTemp < 2.0){
-        this->_kvalue = this->_kvalueLow;
-    }
+  if (error == 0)
+  {
+    USB.println(F("2. WiFi reset to default"));
+  }
+  else
+  {
+    USB.println(F("2. WiFi reset to default ERROR"));
+  }
 
-    value = this->_rawEC * this->_kvalue;             //calculate the EC value after automatic shift
-    value = value / (1.0+0.0185*(temperature-25.0));  //temperature compensation
-    this->_ecvalue = value;                           //store the EC value for Serial CMD calibration
-    return value;
-}
+  ////////////////////////////////////////////////
+  // 3. Configure mode (Station or AP)
+  //////////////////////////////////////////////////
+  error = WIFI_PRO_V3.configureMode(WaspWIFI_v3::MODE_STATION);
 
-void DFRobot_EC::calibration(float voltage, float temperature,char* cmd)
-{   
-    this->_voltage = voltage;
-    this->_temperature = temperature;
-    strupr(cmd);
-    ecCalibration(cmdParse(cmd));                     //if received Serial CMD from the serial monitor, enter into the calibration mode
-}
+  if (error == 0)
+  {
+    USB.println(F("3. WiFi configured OK"));
+  }
+  else
+  {
+    USB.println(F("3. WiFi configured ERROR"));
+  }
 
-void DFRobot_EC::calibration(float voltage, float temperature)
-{   
-    this->_voltage = voltage;
-    this->_temperature = temperature;
+  //////////////////////////////////////////////////
+  // 4. Configure SSID and password
+  //////////////////////////////////////////////////
+  error = WIFI_PRO_V3.configureStation(SSID, PASSW);
+
+  if (error == 0)
+  {
+    USB.println(F("4. WiFi configured SSID OK"));
+  }
+  else
+  {
+    USB.println(F("4. WiFi configured SSID ERROR"));
+  }
+
+  // get current time
+  previous = millis();
+
+  //////////////////////////////////////////////////
+  // 5. Connect to AP
+  //////////////////////////////////////////////////
+  error = WIFI_PRO_V3.connect();
+
+  if (error == 0)
+  {
+    USB.println(F("5. WiFi connected to AP OK"));
+
+    USB.print(F("SSID: "));
+    USB.println(WIFI_PRO_V3._essid);
     
-    if(cmdSerialDataAvailable() > 0)
-    {
-        ecCalibration(cmdParse());  // if received Serial CMD from the serial monitor, enter into the calibration mode
-    }
+    USB.print(F("Channel: "));
+    USB.println(WIFI_PRO_V3._channel, DEC);
+
+    USB.print(F("Signal strength: "));
+    USB.print(WIFI_PRO_V3._power, DEC);
+    USB.println("dB");
+
+    USB.print(F("IP address: "));
+    USB.println(WIFI_PRO_V3._ip);
+
+    USB.print(F("GW address: "));
+    USB.println(WIFI_PRO_V3._gw);
+
+    USB.print(F("Netmask address: "));
+    USB.println(WIFI_PRO_V3._netmask);
+
+    WIFI_PRO_V3.getMAC();
+
+    USB.print(F("MAC address: "));
+    USB.println(WIFI_PRO_V3._mac);
+  }
+  else
+  {
+    USB.println(F("5. WiFi connect to AP ERROR"));
+
+    USB.print(F("Disconnect status: "));
+    USB.println(WIFI_PRO_V3._status, DEC);
+
+    USB.print(F("Disconnect reason: "));
+    USB.println(WIFI_PRO_V3._reason, DEC);
+  }
+
 }
 
-boolean DFRobot_EC::cmdSerialDataAvailable()
-{
-    char cmdReceivedChar;
-    static unsigned long cmdReceivedTimeOut = millis();
-    while (Serial.available()>0) 
-    {
-        if(millis() - cmdReceivedTimeOut > 500U){
-            this->_cmdReceivedBufferIndex = 0;
-            memset(this->_cmdReceivedBuffer,0,(ReceivedBufferLength));
-        }
-        cmdReceivedTimeOut = millis();
-        cmdReceivedChar = Serial.read();
-        if(cmdReceivedChar == '\n' || this->_cmdReceivedBufferIndex==ReceivedBufferLength-1){
-            this->_cmdReceivedBufferIndex = 0;
-            strupr(this->_cmdReceivedBuffer);
-            return true;
-        }else{
-            this->_cmdReceivedBuffer[this->_cmdReceivedBufferIndex] = cmdReceivedChar;
-            this->_cmdReceivedBufferIndex++;
-        }
-    }
-    return false;
-}
-
-byte DFRobot_EC::cmdParse(const char* cmd)
-{
-    byte modeIndex = 0;
-    if(strstr(cmd, "ENTEREC")      != NULL){
-        modeIndex = 1;
-    }else if(strstr(cmd, "EXITEC") != NULL){
-        modeIndex = 3;
-    }else if(strstr(cmd, "CALEC")  != NULL){
-        modeIndex = 2;
-    }
-    return modeIndex;
-}
-
-byte DFRobot_EC::cmdParse()
-{
-    byte modeIndex = 0;
-    if(strstr(this->_cmdReceivedBuffer, "ENTEREC")     != NULL)
-        modeIndex = 1;
-    else if(strstr(this->_cmdReceivedBuffer, "EXITEC") != NULL)
-        modeIndex = 3;
-    else if(strstr(this->_cmdReceivedBuffer, "CALEC")  != NULL)
-        modeIndex = 2;
-    return modeIndex;
-}
-
-void DFRobot_EC::ecCalibration(byte mode)
-{
-    char *receivedBufferPtr;
-    static boolean ecCalibrationFinish  = 0;
-    static boolean enterCalibrationFlag = 0;
-    static float compECsolution;
-    float KValueTemp;
-    switch(mode){
-        case 0:
-        if(enterCalibrationFlag){
-            Serial.println(F(">>>Command Error<<<"));
-        }
-        break;
-        case 1:
-        enterCalibrationFlag = 1;
-        ecCalibrationFinish  = 0;
-        Serial.println();
-        Serial.println(F(">>>Enter EC Calibration Mode<<<"));
-        Serial.println(F(">>>Please put the probe into the 1413us/cm or 12.88ms/cm buffer solution<<<"));
-        Serial.println();
-        break;
-        case 2:
-        if(enterCalibrationFlag){
-            if((this->_rawEC>0.9)&&(this->_rawEC<1.9)){                         //recognize 1.413us/cm buffer solution
-                compECsolution = 1.413*(1.0+0.0185*(this->_temperature-25.0));  //temperature compensation
-            }else if((this->_rawEC>9)&&(this->_rawEC<16.8)){                    //recognize 12.88ms/cm buffer solution
-                compECsolution = 12.88*(1.0+0.0185*(this->_temperature-25.0));  //temperature compensation
-            }else{
-                Serial.print(F(">>>Buffer Solution Error Try Again<<<   "));
-                ecCalibrationFinish = 0;
-            }
-            KValueTemp = RES2*ECREF*compECsolution/1000.0/this->_voltage;       //calibrate the k value
-            if((KValueTemp>0.5) && (KValueTemp<1.5)){
-                Serial.println();
-                Serial.print(F(">>>Successful,K:"));
-                Serial.print(KValueTemp);
-                Serial.println(F(", Send EXITEC to Save and Exit<<<"));
-                if((this->_rawEC>0.9)&&(this->_rawEC<1.9)){
-                    this->_kvalueLow =  KValueTemp;
-                }else if((this->_rawEC>9)&&(this->_rawEC<16.8)){
-                    this->_kvalueHigh =  KValueTemp;
-                }
-                ecCalibrationFinish = 1;
-          }
-            else{
-                Serial.println();
-                Serial.println(F(">>>Failed,Try Again<<<"));
-                Serial.println();
-                ecCalibrationFinish = 0;
-            }
-        }
-        break;
-        case 3:
-        if(enterCalibrationFlag){
-                Serial.println();
-                if(ecCalibrationFinish){   
-                    if((this->_rawEC>0.9)&&(this->_rawEC<1.9)){
-                        EEPROM_write(KVALUEADDR, this->_kvalueLow);
-                    }else if((this->_rawEC>9)&&(this->_rawEC<16.8)){
-                        EEPROM_write(KVALUEADDR+4, this->_kvalueHigh);
-                    }
-                    Serial.print(F(">>>Calibration Successful"));
-                }else{
-                    Serial.print(F(">>>Calibration Failed"));
-                }
-                Serial.println(F(",Exit EC Calibration Mode<<<"));
-                Serial.println();
-                ecCalibrationFinish  = 0;
-                enterCalibrationFlag = 0;
-        }
-        break;
-    }
-}
