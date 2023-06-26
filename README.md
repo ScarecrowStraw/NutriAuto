@@ -18,8 +18,8 @@
 - [x] Read sensor pH, Ec
 - [x] Read RTC
 - [x] Store data in SD card
-- [ ] Menu control in LCD (In progress ...)
-- [ ] Nutri control (with threshold)
+- [x] Menu control in LCD (In progress ...)
+- [x] Nutri control (with threshold)
 - [ ] Send/Recieve data with ESP 8266
 
 
